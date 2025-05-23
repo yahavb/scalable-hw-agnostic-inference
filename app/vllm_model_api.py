@@ -49,7 +49,7 @@ async def gentext(prompt: str,max_new_tokens: int):
   full_text = ""
 
   async with _generate_sem:
-    async for out in model.generate([prompt], params,request_id=req_id):
+    async for out in model.generate(prompt, params,request_id=req_id):
       new_text = out.outputs[0].text
       if t_first is None and new_text:
         t_first = time.time() - t0
