@@ -79,7 +79,7 @@ def cw_pub_metric(metric_name,metric_value,metric_unit):
 
 login(hf_token, add_to_git_credential=True)
 
-def benchmark(n_runs, test_name,model,prompt,max_new_tokens):
+async def benchmark(n_runs, test_name,model,prompt,max_new_tokens):
     response_text,ttft,total_time=await gentext(prompt,max_new_tokens)
     latency_collector = LatencyCollector()
 
@@ -150,17 +150,19 @@ def load_model():
   return AsyncLLMEngine.from_engine_args(engine_args)
 
 model = load_model()
-prompt= "What model are you?"
-benchmark(10,"warmup",model,prompt,default_max_new_tokens)
 app = FastAPI()
 
+@app.on_event("startup")
+async def _warmup():
+  await benchmark(10,"warmup",model,"What model are you?",default_max_new_tokens)
+
 @app.post("/benchmark",response_model=GenerateBenchmarkResponse) 
-def generate_benchmark_report(request: GenerateBenchmarkRequest):
+async def generate_benchmark_report(request: GenerateBenchmarkRequest):
   print(f'DEBUG: GenerateBenchmarkRequest:{request}')
   try:
       with torch.no_grad():
         test_name=f'benchmark:{app_name} on {nodepool} with {request.max_new_tokens} output tokens'
-        response_report=benchmark(request.n_runs,test_name,model,request.prompt,request.max_new_tokens)
+        response_report=await benchmark(request.n_runs,test_name,model,request.prompt,request.max_new_tokens)
         report_base64 = base64.b64encode(response_report.encode()).decode()
       return GenerateBenchmarkResponse(report=report_base64)
   except Exception as e:
