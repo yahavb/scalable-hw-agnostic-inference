@@ -80,12 +80,12 @@ def cw_pub_metric(metric_name,metric_value,metric_unit):
 login(hf_token, add_to_git_credential=True)
 
 def benchmark(n_runs, test_name,model,prompt,max_new_tokens):
-    warmup_run = model.generate(prompt,sampling_params)
+    response_text,ttft,total_time=await gentext(prompt,max_new_tokens)
     latency_collector = LatencyCollector()
 
     for _ in range(n_runs):
         latency_collector.pre_hook()
-        res = model.generate(prompt,sampling_params)
+        response_text,ttft,total_time=await gentext(prompt,max_new_tokens)
         latency_collector.hook()
 
     p0_latency_ms = latency_collector.percentile(0) * 1000
