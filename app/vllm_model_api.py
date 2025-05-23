@@ -15,7 +15,9 @@ from typing import Any, Dict, Optional, Union
 from huggingface_hub import login
 from starlette.responses import StreamingResponse
 import base64
-from vllm import LLM, SamplingParams
+from vllm import SamplingParams
+from vllm.engine.async_llm_engine import AsyncLLMEngine, AsyncEngineArgs
+import uuid  
 from sentence_transformers import SentenceTransformer
 import yaml
 
@@ -38,7 +40,21 @@ with open("/vllm_config.yaml", "r") as file:
 
 login(hf_token, add_to_git_credential=True)
 
-async def gentext(prompt,max_new_tokens):
+async def gentext(prompt: str,max_new_tokens: int):
+  params = SamplingParams(max_tokens=max_new_tokens, stream=True)
+  req_id = str(uuid.uuid4())
+  t0 = time.time()
+  t_first = None
+  full_text = ""
+
+  async with _generate_sem:
+    async for out in model.generate([prompt], params,request_id=req_id,stream=True):
+      new_text = out.outputs[0].text
+      if t_first is None and new_text:
+        t_first = time.time() - t0
+      full_text = new_text 
+  return full_text, t_first, time.time() - t0 
+'''
   start_time = time.time()
   async with _generate_sem:
     outputs = model.generate(prompt,sampling_params,stream=True)
@@ -46,7 +62,7 @@ async def gentext(prompt,max_new_tokens):
   response = outputs[0].outputs[0].text
   total_time =  time.time()-start_time
   return str(response), float(total_time)
-
+'''
 def cw_pub_metric(metric_name,metric_value,metric_unit):
   response = cloudwatch.put_metric_data(
     Namespace=cw_namespace,
@@ -130,8 +146,8 @@ class GenerateBenchmarkResponse(BaseModel):
     report: str = Field(..., description="Benchmark report")
 
 def load_model():
-  model = LLM(**vllm_config)
-  return model
+  engine_args = AsyncEngineArgs(**vllm_config)
+  return AsyncLLMEngine.from_engine_args(engine_args)
 
 model = load_model()
 prompt= "What model are you?"
@@ -155,13 +171,15 @@ def generate_benchmark_report(request: GenerateBenchmarkRequest):
 async def generate_text_post(request: GenerateRequest):
   try:
       with torch.no_grad():
-        response_text,total_time=await gentext(request.prompt,request.max_new_tokens)
+        response_text,ttft,total_time=await gentext(request.prompt,request.max_new_tokens)
       counter_metric=app_name+'-counter'
       cw_pub_metric(counter_metric,1,'Count')
       counter_metric=nodepool
       cw_pub_metric(counter_metric,1,'Count')
       latency_metric=app_name+'-latency'
       cw_pub_metric(latency_metric,total_time,'Seconds')
+      ttft_metric=app_name+'-ttft'
+      cw_pub_metric(ttft_metric,ttft,'Seconds')
       text_base64 = base64.b64encode(response_text.encode()).decode()
       return GenerateResponse(text=text_base64, execution_time=total_time)
   except Exception as e:
