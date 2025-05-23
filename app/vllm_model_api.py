@@ -78,6 +78,7 @@ async def benchmark(n_runs, test_name,model,prompt,max_new_tokens):
     for _ in range(n_runs):
         latency_collector.pre_hook()
         response_text,ttft,total_time=await gentext(prompt,max_new_tokens)
+        print(f"in benchmark:response_text to {prompt} is:{response_text}; ttft is {ttft}; and total_time is {total_time}")
         latency_collector.hook()
 
     p0_latency_ms = latency_collector.percentile(0) * 1000
