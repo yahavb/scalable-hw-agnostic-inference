@@ -26,7 +26,6 @@ _generate_sem = asyncio.Semaphore(1)
 cw_namespace='hw-agnostic-infer'
 default_max_new_tokens=50
 cloudwatch = boto3.client('cloudwatch', region_name='us-west-2')
-sampling_params = SamplingParams(temperature=0.7,top_k=50,top_p=0.9,max_tokens=128,)
 
 app_name=os.environ['APP']
 nodepool=os.environ['NODEPOOL']
@@ -55,15 +54,7 @@ async def gentext(prompt: str,max_new_tokens: int):
         t_first = time.time() - t0
       full_text = new_text 
   return full_text, t_first, time.time() - t0 
-'''
-  start_time = time.time()
-  async with _generate_sem:
-    outputs = model.generate(prompt,sampling_params,stream=True)
-    #outputs = model.generate(prompt,sampling_params)
-  response = outputs[0].outputs[0].text
-  total_time =  time.time()-start_time
-  return str(response), float(total_time)
-'''
+
 def cw_pub_metric(metric_name,metric_value,metric_unit):
   response = cloudwatch.put_metric_data(
     Namespace=cw_namespace,
@@ -75,7 +66,7 @@ def cw_pub_metric(metric_name,metric_value,metric_unit):
        },
     ]
   )
-  print(f"in pub_deployment_counter - response:{response}")
+  print(f"in pub_deployment_counter - metric_name:{metric_name}; metric_value:{metric_value}; metric_unit:{metric_unit};response:{response}")
   return response
 
 login(hf_token, add_to_git_credential=True)
@@ -182,7 +173,7 @@ async def generate_text_post(request: GenerateRequest):
       latency_metric=app_name+'-latency'
       cw_pub_metric(latency_metric,total_time,'Seconds')
       ttft_metric=app_name+'-ttft'
-      cw_pub_metric(ttft_metric,ttft,'Seconds')
+      cw_pub_metric(ttft_metric,ttft,'Milliseconds')
       text_base64 = base64.b64encode(response_text.encode()).decode()
       return GenerateResponse(text=text_base64, execution_time=total_time)
   except Exception as e:
