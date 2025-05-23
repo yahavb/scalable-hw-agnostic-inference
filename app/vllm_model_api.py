@@ -41,8 +41,8 @@ login(hf_token, add_to_git_credential=True)
 async def gentext(prompt,max_new_tokens):
   start_time = time.time()
   async with _generate_sem:
-    #outputs = model.generate(prompt,sampling_params,streaming=True)
-    outputs = model.generate(prompt,sampling_params)
+    outputs = model.generate(prompt,sampling_params,streaming=True)
+    #outputs = model.generate(prompt,sampling_params)
   response = outputs[0].outputs[0].text
   total_time =  time.time()-start_time
   return str(response), float(total_time)
