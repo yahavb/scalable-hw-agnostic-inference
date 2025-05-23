@@ -41,7 +41,8 @@ with open("/vllm_config.yaml", "r") as file:
 login(hf_token, add_to_git_credential=True)
 
 async def gentext(prompt: str,max_new_tokens: int):
-  params = SamplingParams(max_tokens=max_new_tokens, stream=True)
+  params = SamplingParams(max_tokens=max_new_tokens)
+  params.stream = True
   req_id = str(uuid.uuid4())
   t0 = time.time()
   t_first = None
