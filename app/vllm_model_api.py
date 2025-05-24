@@ -19,9 +19,10 @@ import uuid
 from sentence_transformers import SentenceTransformer
 import yaml
 import copy
+from itertools import count
 
-_generate_sem = asyncio.Semaphore(1)
-
+#_generate_sem = asyncio.Semaphore(1)
+_req_ctr = count(1)
 cw_namespace='hw-agnostic-infer'
 default_max_new_tokens=50
 cloudwatch = boto3.client('cloudwatch', region_name='us-west-2')
@@ -44,25 +45,26 @@ base_params = SamplingParams(
     top_p=0.9,
     max_tokens=default_max_new_tokens,
 )
-base_params.stream = False 
+base_params.stream = True 
 base_params.stream_chunk_size = 4
-'''
-async def gentext(prompt: str,max_new_tokens: int):
-  params = SamplingParams(max_tokens=max_new_tokens)
-  params.stream = True
-  req_id = str(uuid.uuid4())
-  t0 = time.time()
-  t_first = None
-  full_text = ""
 
-  async with _generate_sem:
-    async for out in model.generate(prompt, params,request_id=req_id):
-      new_text = out.outputs[0].text
-      if t_first is None and new_text:
-        t_first = time.time() - t0
-      full_text = new_text 
-  return full_text, t_first, time.time() - t0 
-'''
+async def gentext(prompt: str, max_new_tokens: int):
+    params = copy.copy(base_params)        # cheap shallow clone
+    params.max_tokens = max_new_tokens
+
+    req_id = f"r{next(_req_ctr)}"          # required by AsyncLLMEngine
+    start  = time.time()
+    ttft   = None
+    text   = ""
+
+    async for out in model.generate(prompt, params, req_id):
+        chunk = out.outputs[0].text
+        if ttft is None and chunk:         # first non-empty chunk
+            ttft = time.time() - start
+        text += chunk                      # accumulate
+
+    return text, ttft, time.time() - start
+
 '''
 async def gentext(prompt: str, max_new_tokens: int):
     params = base_params.clone()
@@ -75,7 +77,7 @@ async def gentext(prompt: str, max_new_tokens: int):
 
     text = outputs[0].outputs[0].text
     return text, ttft, time.time() - t0
-'''
+
 async def gentext(prompt: str, max_new_tokens: int):
     params = copy.copy(base_params)      # cheap, thread-safe clone
     params.max_tokens = max_new_tokens   # per-request override
@@ -91,7 +93,7 @@ async def gentext(prompt: str, max_new_tokens: int):
         text += chunk                    # accumulate, don’t overwrite
 
     return text, ttft, time.time() - start
-
+'''
 def cw_pub_metric(metric_name,metric_value,metric_unit):
   response = cloudwatch.put_metric_data(
     Namespace=cw_namespace,
