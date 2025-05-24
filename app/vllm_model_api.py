@@ -30,7 +30,9 @@ nodepool=os.environ['NODEPOOL']
 pod_name = os.environ['POD_NAME']
 hf_token = os.environ['HUGGINGFACE_TOKEN'].strip()
 repo_id=os.environ['MODEL_ID']
+stream_enabled = os.environ["STREAM_ENABLED"].lower() == "true"
 os.environ['NEURON_COMPILED_ARTIFACTS']=repo_id
+
 
 with open("/vllm_config.yaml", "r") as file:
   vllm_config=yaml.safe_load(file)
@@ -43,7 +45,7 @@ base_params = SamplingParams(
     top_p=0.9,
     max_tokens=default_max_new_tokens,
 )
-base_params.stream = True 
+base_params.stream = stream_enabled 
 base_params.stream_chunk_size = 8
 
 async def gentext(prompt: str, max_new_tokens: int):
@@ -55,12 +57,16 @@ async def gentext(prompt: str, max_new_tokens: int):
     ttft   = None
     text   = ""
 
-    async for out in model.generate(prompt, params, req_id):
+    if stream_enabled:
+      async for out in model.generate(prompt, params, req_id):
         chunk = out.outputs[0].text
         if ttft is None and chunk:         # first non-empty chunk
             ttft = time.time() - start
         text += chunk                      # accumulate
-
+    else:
+      outputs = await model.generate(prompt, params, req_id)
+      text   = outputs[0].outputs[0].text
+      ttft   = outputs[0].metrics.get("first_token_latency")
     return text, ttft, time.time() - start
 
 def cw_pub_metric(metric_name,metric_value,metric_unit):
