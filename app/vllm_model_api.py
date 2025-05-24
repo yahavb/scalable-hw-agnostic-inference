@@ -18,6 +18,7 @@ from vllm.engine.async_llm_engine import AsyncLLMEngine, AsyncEngineArgs
 import uuid  
 from sentence_transformers import SentenceTransformer
 import yaml
+import copy
 
 _generate_sem = asyncio.Semaphore(1)
 
@@ -42,8 +43,9 @@ base_params = SamplingParams(
     top_k=50,
     top_p=0.9,
     max_tokens=default_max_new_tokens,
-    stream=False          # keep the engine batching-friendly
 )
+base_params.stream = False 
+base_params.stream_chunk_size = 4
 '''
 async def gentext(prompt: str,max_new_tokens: int):
   params = SamplingParams(max_tokens=max_new_tokens)
@@ -61,6 +63,7 @@ async def gentext(prompt: str,max_new_tokens: int):
       full_text = new_text 
   return full_text, t_first, time.time() - t0 
 '''
+'''
 async def gentext(prompt: str, max_new_tokens: int):
     params = base_params.clone()
     params.max_tokens = max_new_tokens
@@ -72,6 +75,22 @@ async def gentext(prompt: str, max_new_tokens: int):
 
     text = outputs[0].outputs[0].text
     return text, ttft, time.time() - t0
+'''
+async def gentext(prompt: str, max_new_tokens: int):
+    params = copy.copy(base_params)      # cheap, thread-safe clone
+    params.max_tokens = max_new_tokens   # per-request override
+
+    start = time.time()
+    ttft  = None
+    text  = ""
+
+    async for out in model.generate(prompt, params):
+        chunk = out.outputs[0].text
+        if ttft is None and chunk:
+            ttft = time.time() - start   # first token latency
+        text += chunk                    # accumulate, don’t overwrite
+
+    return text, ttft, time.time() - start
 
 def cw_pub_metric(metric_name,metric_value,metric_unit):
   response = cloudwatch.put_metric_data(
