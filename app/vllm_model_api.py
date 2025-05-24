@@ -15,13 +15,11 @@ from starlette.responses import StreamingResponse
 import base64
 from vllm import SamplingParams
 from vllm.engine.async_llm_engine import AsyncLLMEngine, AsyncEngineArgs
-import uuid  
 from sentence_transformers import SentenceTransformer
 import yaml
 import copy
 from itertools import count
 
-#_generate_sem = asyncio.Semaphore(1)
 _req_ctr = count(1)
 cw_namespace='hw-agnostic-infer'
 default_max_new_tokens=50
@@ -46,10 +44,10 @@ base_params = SamplingParams(
     max_tokens=default_max_new_tokens,
 )
 base_params.stream = True 
-base_params.stream_chunk_size = 4
+base_params.stream_chunk_size = 8
 
 async def gentext(prompt: str, max_new_tokens: int):
-    params = copy.copy(base_params)        # cheap shallow clone
+    params = copy.copy(base_params)
     params.max_tokens = max_new_tokens
 
     req_id = f"r{next(_req_ctr)}"          # required by AsyncLLMEngine
@@ -65,35 +63,6 @@ async def gentext(prompt: str, max_new_tokens: int):
 
     return text, ttft, time.time() - start
 
-'''
-async def gentext(prompt: str, max_new_tokens: int):
-    params = base_params.clone()
-    params.max_tokens = max_new_tokens
-    t0 = time.time()
-
-    outputs = await asyncio.to_thread(model.generate, prompt, params)
-
-    ttft = outputs[0].metrics.get("first_token_latency", None)
-
-    text = outputs[0].outputs[0].text
-    return text, ttft, time.time() - t0
-
-async def gentext(prompt: str, max_new_tokens: int):
-    params = copy.copy(base_params)      # cheap, thread-safe clone
-    params.max_tokens = max_new_tokens   # per-request override
-
-    start = time.time()
-    ttft  = None
-    text  = ""
-
-    async for out in model.generate(prompt, params):
-        chunk = out.outputs[0].text
-        if ttft is None and chunk:
-            ttft = time.time() - start   # first token latency
-        text += chunk                    # accumulate, don’t overwrite
-
-    return text, ttft, time.time() - start
-'''
 def cw_pub_metric(metric_name,metric_value,metric_unit):
   response = cloudwatch.put_metric_data(
     Namespace=cw_namespace,
@@ -207,13 +176,17 @@ async def generate_text_post(request: GenerateRequest):
       with torch.no_grad():
         response_text,ttft,total_time=await gentext(request.prompt,request.max_new_tokens)
       counter_metric=app_name+'-counter'
-      cw_pub_metric(counter_metric,1,'Count')
+      #cw_pub_metric(counter_metric,1,'Count')
+      await asyncio.to_thread(cw_pub_metric,counter_metric,1,'Count')
       counter_metric=nodepool
-      cw_pub_metric(counter_metric,1,'Count')
+      #cw_pub_metric(counter_metric,1,'Count')
+      await asyncio.to_thread(cw_pub_metric,counter_metric,1,'Count')
       latency_metric=app_name+'-latency'
-      cw_pub_metric(latency_metric,total_time,'Seconds')
+      #cw_pub_metric(latency_metric,total_time,'Seconds')
+      await asyncio.to_thread(cw_pub_metric,latency_metric,total_time,'Seconds')
       ttft_metric=app_name+'-ttft'
-      cw_pub_metric(ttft_metric,ttft,'Milliseconds')
+      #cw_pub_metric(ttft_metric,ttft,'Milliseconds')
+      await asyncio.to_thread(cw_pub_metric,ttft_metric,total_time,'Milliseconds')
       text_base64 = base64.b64encode(response_text.encode()).decode()
       return GenerateResponse(text=text_base64, execution_time=total_time)
   except Exception as e:
