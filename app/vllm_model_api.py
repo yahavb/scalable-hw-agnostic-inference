@@ -6,8 +6,6 @@ import time
 import argparse
 import torch
 import torch.nn as nn
-#import torch_neuronx
-#import neuronx_distributed
 import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -39,6 +37,14 @@ with open("/vllm_config.yaml", "r") as file:
 
 login(hf_token, add_to_git_credential=True)
 
+base_params = SamplingParams(
+    temperature=0.7,
+    top_k=50,
+    top_p=0.9,
+    max_tokens=default_max_new_tokens,
+    stream=False          # keep the engine batching-friendly
+)
+'''
 async def gentext(prompt: str,max_new_tokens: int):
   params = SamplingParams(max_tokens=max_new_tokens)
   params.stream = True
@@ -54,6 +60,18 @@ async def gentext(prompt: str,max_new_tokens: int):
         t_first = time.time() - t0
       full_text = new_text 
   return full_text, t_first, time.time() - t0 
+'''
+async def gentext(prompt: str, max_new_tokens: int):
+    params = base_params.clone()
+    params.max_tokens = max_new_tokens
+    t0 = time.time()
+
+    outputs = await asyncio.to_thread(model.generate, prompt, params)
+
+    ttft = outputs[0].metrics.get("first_token_latency", None)
+
+    text = outputs[0].outputs[0].text
+    return text, ttft, time.time() - t0
 
 def cw_pub_metric(metric_name,metric_value,metric_unit):
   response = cloudwatch.put_metric_data(
