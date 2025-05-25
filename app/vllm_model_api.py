@@ -64,9 +64,10 @@ async def gentext(prompt: str, max_new_tokens: int):
             ttft = time.time() - start
         text += chunk                      # accumulate
     else:
-      outputs = await model.generate(prompt, params, req_id)
-      text   = outputs[0].outputs[0].text
-      ttft   = outputs[0].metrics.get("first_token_latency")
+      async for out in model.generate(prompt, params, req_id):
+        text = out.outputs[0].text
+        ttft = out.metrics.get("first_token_latency", time.time() - start)
+        break
     return text, ttft, time.time() - start
 
 def cw_pub_metric(metric_name,metric_value,metric_unit):
