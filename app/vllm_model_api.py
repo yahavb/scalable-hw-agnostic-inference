@@ -65,8 +65,9 @@ async def gentext(prompt: str, max_new_tokens: int):
         text += chunk                      # accumulate
     else:
       async for out in model.generate(prompt, params, req_id):
+        if ttft is None:
+          ttft = time.time() - start
         text = out.outputs[0].text
-        ttft = out.metrics.get("first_token_latency", time.time() - start)
         break
     return text, ttft, time.time() - start
 
