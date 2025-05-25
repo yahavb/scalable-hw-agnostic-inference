@@ -37,7 +37,8 @@ os.environ['NEURON_COMPILED_ARTIFACTS']=repo_id
 
 with open("/vllm_config.yaml", "r") as file:
   vllm_config=yaml.safe_load(file)
-
+  for bad in ("show_progress", "disable_log_stats", "use_tqdm"): 
+    vllm_config.pop(bad, None)
 login(hf_token, add_to_git_credential=True)
 
 base_params = SamplingParams(
