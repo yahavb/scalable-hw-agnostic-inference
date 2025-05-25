@@ -15,6 +15,7 @@ from starlette.responses import StreamingResponse
 import base64
 from vllm import SamplingParams
 from vllm.engine.async_llm_engine import AsyncLLMEngine, AsyncEngineArgs
+from vllm import LLM
 from sentence_transformers import SentenceTransformer
 import yaml
 import copy
@@ -154,8 +155,11 @@ class GenerateBenchmarkResponse(BaseModel):
     report: str = Field(..., description="Benchmark report")
 
 def load_model():
-  engine_args = AsyncEngineArgs(**vllm_config)
-  return AsyncLLMEngine.from_engine_args(engine_args)
+  if stream_enabled: 
+    ea = AsyncEngineArgs(**vllm_config)
+    return AsyncLLMEngine.from_engine_args(ea)
+  else: 
+    return LLM(**vllm_config)
 
 model = load_model()
 app = FastAPI()
