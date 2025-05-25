@@ -66,7 +66,7 @@ async def gentext(prompt: str, max_new_tokens: int):
             ttft = time.time() - start
         text += chunk                      # accumulate
     else:
-      outputs = await asyncio.to_thread(model.generate, prompt, params)
+      outputs = await asyncio.to_thread(model.generate, prompt, params, False)
       if outputs:
         first = outputs[0]
         text = first.outputs[0].text
