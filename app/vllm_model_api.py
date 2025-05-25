@@ -66,9 +66,13 @@ async def gentext(prompt: str, max_new_tokens: int):
         text += chunk                      # accumulate
     else:
       outputs = await asyncio.to_thread(model.generate, prompt, params)
-      text = outputs[0].outputs[0].text
-      ttft = getattr(out.metrics, "first_token_latency", time.time() - start)
-      
+      if outputs:
+        first = outputs[0]
+        text = first.outputs[0].text
+        ttft = getattr(first.metrics, "first_token_latency", time.time() - start)
+      else: 
+        text = ""
+        ttft = time.time() - start
     return text, ttft, time.time() - start
 
 def cw_pub_metric(metric_name,metric_value,metric_unit):
