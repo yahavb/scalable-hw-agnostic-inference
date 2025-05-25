@@ -67,7 +67,7 @@ async def gentext(prompt: str, max_new_tokens: int):
     else:
       outputs = await asyncio.to_thread(model.generate, prompt, params)
       text = outputs[0].outputs[0].text
-      ttft = outputs[0].metrics.get("first_token_latency", time.time() - start)
+      ttft = getattr(out.metrics, "first_token_latency", time.time() - start)
       
     return text, ttft, time.time() - start
 
