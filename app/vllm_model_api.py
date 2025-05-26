@@ -90,7 +90,7 @@ def cw_pub_metric(metric_name,metric_value,metric_unit):
        },
     ]
   )
-  #print(f"DEBUG: in pub_deployment_counter - metric_name:{metric_name}; metric_value:{metric_value}; metric_unit:{metric_unit};response:{response}")
+  print(f"DEBUG: in pub_deployment_counter - metric_name:{metric_name}; metric_value:{metric_value}; metric_unit:{metric_unit};response:{response}")
   return response
 
 login(hf_token, add_to_git_credential=True)
