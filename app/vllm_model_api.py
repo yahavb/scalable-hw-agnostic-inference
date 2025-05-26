@@ -15,7 +15,7 @@ from starlette.responses import StreamingResponse
 import base64
 from vllm import SamplingParams
 from vllm.engine.async_llm_engine import AsyncLLMEngine, AsyncEngineArgs
-from vllm import LLM
+#from vllm import LLM
 from sentence_transformers import SentenceTransformer
 import yaml
 import copy
@@ -49,7 +49,7 @@ base_params = SamplingParams(
 )
 base_params.stream = stream_enabled 
 base_params.stream_chunk_size = 8
-
+'''
 async def gentext(prompt: str, max_new_tokens: int):
     params = copy.copy(base_params)
     params.max_tokens = max_new_tokens
@@ -74,6 +74,28 @@ async def gentext(prompt: str, max_new_tokens: int):
       else: 
         text = ""
         ttft = time.time() - start
+    return text, ttft, time.time() - start
+'''
+async def gentext(prompt: str, max_new_tokens: int):
+    params = copy.copy(base_params)
+    params.max_tokens = max_new_tokens
+    params.stream = stream_enabled          # True → stream, False → batch
+
+    req_id = f"r{next(_req_ctr)}"
+    start  = time.time()
+    ttft   = None
+    text   = ""
+
+    async for out in model.generate(prompt, params, req_id):
+        chunk = out.outputs[0].text
+        if ttft is None and chunk:          # first token
+            ttft = time.time() - start
+        text += chunk
+
+        # when stream=False the engine yields exactly ONE batch
+        if not stream_enabled:              # nothing more to read
+            break
+
     return text, ttft, time.time() - start
 
 def cw_pub_metric(metric_name,metric_value,metric_unit):
@@ -160,11 +182,8 @@ class GenerateBenchmarkResponse(BaseModel):
     report: str = Field(..., description="Benchmark report")
 
 def load_model():
-  if stream_enabled: 
-    ea = AsyncEngineArgs(**vllm_config)
-    return AsyncLLMEngine.from_engine_args(ea)
-  else: 
-    return LLM(**vllm_config)
+  ea = AsyncEngineArgs(**vllm_config)
+  return AsyncLLMEngine.from_engine_args(ea)
 
 model = load_model()
 app = FastAPI()
