@@ -70,13 +70,7 @@ async def gentext(prompt: str, max_new_tokens: int):
             ttft = time.time() - start
         text += chunk
     else:
-      #outputs = await asyncio.to_thread(lambda: model.generate([prompt], params, False, False))      
-      outputs = await asyncio.to_thread(lambda: model.generate(
-        [[{"role": "user", "content": prompt}]],
-        params,
-        False,   # use_tqdm
-        False    # show_progress
-      ))
+      outputs = await asyncio.to_thread(model.generate,prompt,params)      
       print(f"DEBUG: in gentext under batch; outputs:{outputs}")
       text=outputs[0].outputs[0].text
       ttft=None
