@@ -21,6 +21,7 @@ import yaml
 import copy
 from itertools import count
 
+_generate_sem = asyncio.Semaphore(1)
 _req_ctr = count(1)
 cw_namespace='hw-agnostic-infer'
 default_max_new_tokens=50
@@ -70,7 +71,8 @@ async def gentext(prompt: str, max_new_tokens: int):
             ttft = time.time() - start
         text += chunk
     else:
-      outputs = await asyncio.to_thread(model.generate,prompt,params)      
+      async with _generate_sem:
+        outputs = await asyncio.to_thread(model.generate,prompt,params)      
       print(f"DEBUG: in gentext under batch; outputs:{outputs}")
       text=outputs[0].outputs[0].text
       ttft=None
