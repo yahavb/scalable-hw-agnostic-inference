@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional, Union
 from huggingface_hub import login
 from starlette.responses import StreamingResponse
 import base64
-from vllm import SamplingParams
+from vllm import LLM,SamplingParams
 from vllm.engine.async_llm_engine import AsyncLLMEngine, AsyncEngineArgs
 #from vllm import LLM
 from sentence_transformers import SentenceTransformer
