@@ -49,49 +49,31 @@ base_params = SamplingParams(
 )
 base_params.stream = stream_enabled 
 base_params.stream_chunk_size = 8
-'''
-async def gentext(prompt: str, max_new_tokens: int):
-    params = copy.copy(base_params)
-    params.max_tokens = max_new_tokens
 
-    req_id = f"r{next(_req_ctr)}"          # required by AsyncLLMEngine
-    start  = time.time()
-    ttft   = None
-    text   = ""
-
-    if stream_enabled:
-      async for out in model.generate(prompt, params, req_id):
-        chunk = out.outputs[0].text
-        if ttft is None and chunk:         # first non-empty chunk
-            ttft = time.time() - start
-        text += chunk                      # accumulate
-    else:
-      outputs = await asyncio.to_thread(lambda: model.generate_simple([prompt], params, False, False))
-      if outputs:
-        first = outputs[0]
-        text = first.outputs[0].text
-        ttft = getattr(first.metrics, "first_token_latency", time.time() - start)
-      else: 
-        text = ""
-        ttft = time.time() - start
-    return text, ttft, time.time() - start
-'''
 async def gentext(prompt: str, max_new_tokens: int):
     params = copy.copy(base_params)
     params.max_tokens = max_new_tokens
     params.stream = stream_enabled          # True → stream, False → batch
 
-    req_id = f"r{next(_req_ctr)}"
     start  = time.time()
     ttft   = None
     text   = ""
 
-    async for out in model.generate(prompt, params, req_id):
+    params.stream = False
+
+    if stream_enabled:
+      #params.stream = True
+      req_id = f"r{next(_req_ctr)}"
+      async for out in model.generate(prompt, params, req_id):
         chunk = out.outputs[0].text
         if ttft is None and chunk:          # first token
             ttft = time.time() - start
         text += chunk
-
+    else:
+      outputs = await asyncio.to_thread(lambda: model.generate([prompt], params, False, False))      
+      print(f"DEBUG: in gentext under batch; outputs:{outputs}")
+      text=outputs[0].outputs[0].text
+      ttft=None
     return text, ttft, time.time() - start
 
 def cw_pub_metric(metric_name,metric_value,metric_unit):
@@ -105,7 +87,7 @@ def cw_pub_metric(metric_name,metric_value,metric_unit):
        },
     ]
   )
-  print(f"in pub_deployment_counter - metric_name:{metric_name}; metric_value:{metric_value}; metric_unit:{metric_unit};response:{response}")
+  #print(f"DEBUG: in pub_deployment_counter - metric_name:{metric_name}; metric_value:{metric_value}; metric_unit:{metric_unit};response:{response}")
   return response
 
 login(hf_token, add_to_git_credential=True)
@@ -117,7 +99,7 @@ async def benchmark(n_runs, test_name,model,prompt,max_new_tokens):
     for _ in range(n_runs):
         latency_collector.pre_hook()
         response_text,ttft,total_time=await gentext(prompt,max_new_tokens)
-        print(f"in benchmark:response_text to {prompt} is:{response_text}; ttft is {ttft}; and total_time is {total_time}")
+        #print(f"DEBUG: in benchmark:response_text to {prompt} is:{response_text}; ttft is {ttft}; and total_time is {total_time}")
         latency_collector.hook()
 
     p0_latency_ms = latency_collector.percentile(0) * 1000
@@ -178,8 +160,11 @@ class GenerateBenchmarkResponse(BaseModel):
     report: str = Field(..., description="Benchmark report")
 
 def load_model():
-  ea = AsyncEngineArgs(**vllm_config)
-  return AsyncLLMEngine.from_engine_args(ea)
+    if stream_enabled:                    
+        ea = AsyncEngineArgs(**vllm_config)
+        return AsyncLLMEngine.from_engine_args(ea)
+    else:                                
+        return LLM(**vllm_config)
 
 model = load_model()
 app = FastAPI()
@@ -190,7 +175,6 @@ async def _warmup():
 
 @app.post("/benchmark",response_model=GenerateBenchmarkResponse) 
 async def generate_benchmark_report(request: GenerateBenchmarkRequest):
-  print(f'DEBUG: GenerateBenchmarkRequest:{request}')
   try:
       with torch.no_grad():
         test_name=f'benchmark:{app_name} on {nodepool} with {request.max_new_tokens} output tokens'
@@ -207,17 +191,14 @@ async def generate_text_post(request: GenerateRequest):
       with torch.no_grad():
         response_text,ttft,total_time=await gentext(request.prompt,request.max_new_tokens)
       counter_metric=app_name+'-counter'
-      #cw_pub_metric(counter_metric,1,'Count')
       await asyncio.to_thread(cw_pub_metric,counter_metric,1,'Count')
       counter_metric=nodepool
-      #cw_pub_metric(counter_metric,1,'Count')
       await asyncio.to_thread(cw_pub_metric,counter_metric,1,'Count')
       latency_metric=app_name+'-latency'
-      #cw_pub_metric(latency_metric,total_time,'Seconds')
       await asyncio.to_thread(cw_pub_metric,latency_metric,total_time,'Seconds')
-      ttft_metric=app_name+'-ttft'
-      #cw_pub_metric(ttft_metric,ttft,'Milliseconds')
-      await asyncio.to_thread(cw_pub_metric,ttft_metric,total_time,'Milliseconds')
+      if ttft is not None:
+        ttft_metric=app_name+'-ttft'
+        await asyncio.to_thread(cw_pub_metric,ttft_metric,total_time,'Milliseconds')
       text_base64 = base64.b64encode(response_text.encode()).decode()
       return GenerateResponse(text=text_base64, execution_time=total_time)
   except Exception as e:
