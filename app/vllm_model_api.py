@@ -92,10 +92,6 @@ async def gentext(prompt: str, max_new_tokens: int):
             ttft = time.time() - start
         text += chunk
 
-        # when stream=False the engine yields exactly ONE batch
-        if not stream_enabled:              # nothing more to read
-            break
-
     return text, ttft, time.time() - start
 
 def cw_pub_metric(metric_name,metric_value,metric_unit):
