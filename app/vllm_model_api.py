@@ -76,7 +76,10 @@ async def gentext(prompt: str, max_new_tokens: int):
       print(f"DEBUG: in gentext under batch; outputs:{outputs}")
       text=outputs[0].outputs[0].text
       metrics=outputs[0].metrics 
-      ttft = (metrics.first_token_time - metrics.arrival_time) * 1_000
+      if metrics.first_token_time is None:
+        ttft = None
+      else: 
+        ttft = (metrics.first_token_time - metrics.arrival_time) * 1_000
     return text, ttft, time.time() - start
 
 def cw_pub_metric(metric_name,metric_value,metric_unit):
