@@ -75,11 +75,12 @@ async def gentext(prompt: str, max_new_tokens: int):
         outputs = await asyncio.to_thread(model.generate,prompt,params)      
       print(f"DEBUG: in gentext under batch; outputs:{outputs}")
       text=outputs[0].outputs[0].text
-      metrics=outputs[0].metrics 
-      if metrics.first_token_time is None:
-        ttft = None
-      else: 
+      first=outputs[0]
+      metrics = getattr(first, "metrics", None)
+      if metrics and getattr(metrics, "first_token_time", None):
         ttft = (metrics.first_token_time - metrics.arrival_time) * 1_000
+      else:
+        ttft = (time.time() - start) * 1_000        
     return text, ttft, time.time() - start
 
 def cw_pub_metric(metric_name,metric_value,metric_unit):
