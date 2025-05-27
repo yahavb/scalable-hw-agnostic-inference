@@ -73,7 +73,7 @@ async def gentext(prompt: str, max_new_tokens: int):
     else:
       async with _generate_sem:
         outputs = await asyncio.to_thread(model.generate,prompt,params)      
-      print(f"DEBUG: in gentext under batch; outputs:{outputs}")
+      #print(f"DEBUG: in gentext under batch; outputs:{outputs}")
       text=outputs[0].outputs[0].text
       first=outputs[0]
       metrics = getattr(first, "metrics", None)
