@@ -31,16 +31,18 @@ for model in models:
     model['url'] = f"http://{host}:{port}"
 
 async def fetch_text(client,url,prompt,max_new_tokens=32):
-    endpoint = f"{url}/generate"
+    endpoint = f"{url}/v1/completions"
     payload = {
-        "prompt": prompt,
-        "max_new_tokens": max_new_tokens
+      "model": model_name,
+      "prompt": [prompt],
+      "max_tokens": max_tokens,
+      "temperature": temperature,
     }
     try:
         response = await client.post(endpoint, json=payload, timeout=60.0)
         response.raise_for_status()
         data = response.json()
-        response_text = base64.b64decode(data['text']).decode('utf-8')
+        response_text = data['choices'][0]['text']
         execution_time = data.get('execution_time', 0)
         return response_text, f"{execution_time:.2f} seconds"
     except httpx.RequestError as e:
@@ -51,11 +53,12 @@ async def fetch_text(client,url,prompt,max_new_tokens=32):
         return None, f"Error: {str(e)}"
 
 async def fetch_benchmark(client, url, prompt, n_runs=1, max_new_tokens=32):
-    endpoint = f"{url}/benchmark"
+    endpoint = f"{url}/v1/completions"
     payload = {
-        "prompt": prompt,
-        "n_runs": n_runs,
-        "max_new_tokens": max_new_tokens
+      "model": model_name,
+      "prompt": [prompt],
+      "max_tokens": max_tokens,
+      "temperature": temperature,
     }
     try:
         response = await client.post(endpoint, json=payload, timeout=300.0)
@@ -77,12 +80,12 @@ async def call_model_api(prompt,task_type,n_runs,max_new_tokens):
     async with httpx.AsyncClient() as client:
       if task_type == "fetch_text":
         tasks = [
-            fetch_text(client, model['url'], prompt,max_new_tokens)
-            for model in models
+          tasks = [fetch_text(client, model['url'],prompt,model['name'],max_new_tokens,temperature,)
+          for model in models
         ]
       else: 
         tasks = [
-            fetch_benchmark(client, model['url'], prompt, n_runs, max_new_tokens)
+            fetch_benchmark(client,model['url'],prompt,n_runs,max_new_tokens,temperature,)
             for model in models
         ]
       results = await asyncio.gather(*tasks)
@@ -112,6 +115,7 @@ with gr.Blocks() as interface:
             task_type = gr.Dropdown(label="Task Type",choices=["fetch_text", "fetch_benchmark"],value="fetch_text",interactive=True)
             n_runs_box = gr.Number(label="Number of Runs (Benchmark)",value=1)
             max_new_tokens_box = gr.Number(label="Max New Tokens",value=32)
+            temperature_box = gr.Number(label="Temperature", value=0.0)
             generate_button = gr.Button("Run Task", variant="primary")
         
         with gr.Column(scale=2):
@@ -129,7 +133,7 @@ with gr.Blocks() as interface:
     # callback for the button
     generate_button.click(
         fn=call_model_api,
-        inputs=[prompt,task_type, n_runs_box, max_new_tokens_box],
+        inputs=[prompt, task_type, n_runs_box, max_new_tokens_box, temperature_box],
         outputs=text_components + exec_time_components,
         api_name="generate_text"
     )
