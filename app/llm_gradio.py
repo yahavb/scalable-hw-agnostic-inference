@@ -76,16 +76,16 @@ async def fetch_benchmark(client, url, prompt, model_name, n_runs=1, max_tokens=
         traceback.print_exc()
         return None, f"Error: {str(e)}"
 
-async def call_model_api(prompt, task_type, n_runs, max_new_tokens, temperature):
+async def call_model_api(model_name,prompt, task_type, n_runs, max_new_tokens, temperature):
     async with httpx.AsyncClient() as client:
       if task_type == "fetch_text":
         tasks = [
-          fetch_text(client, model['url'],prompt,model['name'],max_new_tokens,temperature,)
+          fetch_text(client, model['url'],prompt,model_name,max_new_tokens,temperature,)
           for model in models
         ]
       else: 
         tasks = [
-            fetch_benchmark(client,model['url'],prompt,model['name'],n_runs,max_new_tokens,temperature,)
+            fetch_benchmark(client,model['url'],prompt,model_name,n_runs,max_new_tokens,temperature,)
             for model in models
         ]
       results = await asyncio.gather(*tasks)
@@ -110,6 +110,11 @@ with gr.Blocks() as interface:
 
     with gr.Row():
         with gr.Column(scale=1):
+            model_name = gr.Textbox(
+              label="Model Name",
+              value="meta-llama/Llama-3.2-1B",
+              placeholder="e.g. meta-llama/Llama-3.2-1B"
+            )
             prompt = gr.Textbox(label="Prompt", lines=10, placeholder="Enter your prompt here...",elem_id="prompt-box")
             #generate_button = gr.Button("Generate Text",variant="primary")
             task_type = gr.Dropdown(label="Task Type",choices=["fetch_text", "fetch_benchmark"],value="fetch_text",interactive=True)
@@ -133,7 +138,7 @@ with gr.Blocks() as interface:
     # callback for the button
     generate_button.click(
         fn=call_model_api,
-        inputs=[prompt, task_type, n_runs_box, max_new_tokens_box, temperature_box],
+        inputs=[model_name,prompt, task_type, n_runs_box, max_new_tokens_box, temperature_box],
         outputs=text_components + exec_time_components,
         api_name="generate_text"
     )
