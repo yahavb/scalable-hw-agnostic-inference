@@ -80,7 +80,7 @@ async def call_model_api(prompt,task_type,n_runs,max_new_tokens):
     async with httpx.AsyncClient() as client:
       if task_type == "fetch_text":
         tasks = [
-          tasks = [fetch_text(client, model['url'],prompt,model['name'],max_new_tokens,temperature,)
+          fetch_text(client, model['url'],prompt,model['name'],max_new_tokens,temperature,)
           for model in models
         ]
       else: 
