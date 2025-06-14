@@ -26,9 +26,7 @@ app = FastAPI()
 models = load_models_config()
 
 for model in models:
-    host = os.environ[model['host_env']]
-    port = os.environ[model['port_env']]
-    model['url'] = f"http://{host}:{port}"
+    model['url'] = f"http://{model['service']}.default.svc.cluster.local:8000"
 
 async def fetch_text(client, url, prompt, model_name, max_tokens, temperature):
     endpoint = f"{url}/v1/completions"
