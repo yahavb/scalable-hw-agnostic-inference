@@ -112,8 +112,8 @@ with gr.Blocks() as interface:
         with gr.Column(scale=1):
             model_name = gr.Textbox(
               label="Model Name",
-              value="meta-llama/Llama-3.2-1B",
-              placeholder="e.g. meta-llama/Llama-3.2-1B"
+              value="meta-llama/Llama-3.1-8B",
+              placeholder="e.g. meta-llama/Llama-3.1-8B"
             )
             prompt = gr.Textbox(label="Prompt", lines=10, placeholder="Enter your prompt here...",elem_id="prompt-box")
             #generate_button = gr.Button("Generate Text",variant="primary")
