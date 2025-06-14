@@ -9,6 +9,7 @@ import asyncio
 import httpx
 import traceback
 import json
+import time
 
 MODELS_FILE_PATH=os.environ['MODELS_FILE_PATH']
 
@@ -36,20 +37,40 @@ async def fetch_text(client, url, prompt, model_name, max_tokens, temperature):
       "prompt": [prompt],
       "max_tokens": max_tokens,
       "temperature": temperature,
+      "stream": True, 
     }
+    start = time.time()
+    ttft = None
+    last = start
+    tpot = []
+    text_accum = ""
     try:
-        response = await client.post(endpoint, json=payload, timeout=60.0)
-        response.raise_for_status()
-        data = response.json()
-        response_text = data['choices'][0]['text']
-        execution_time = data.get('execution_time', 0)
-        return response_text, f"{execution_time:.2f} seconds"
-    except httpx.RequestError as e:
-        traceback.print_exc()
-        return None, f"Request Error: {str(e)}"
+        async with client.stream("POST", endpoint, json=payload, timeout=60.0) as resp:
+          resp.raise_for_status()
+          async for line in resp.aiter_lines():
+            if not line.startswith("data:"):
+              continue
+            chunk_obj = json.loads(line[len("data:"):].strip())
+            chunk = chunk_obj["choices"][0]["text"]
+
+            now = time.time()
+            if ttft is None:
+              ttft = now - start
+            else:
+              tpot.append(now - last)
+            last = now
+            text_accum += chunk
     except Exception as e:
         traceback.print_exc()
         return None, f"Error: {str(e)}"
+    total = last - start
+    tpot_avg = (sum(tpot) / len(tpot)) if tpot else 0.0
+    metrics = (
+        f"TTFT={ttft*1000:.1f}ms, "
+        f"TPUT_avg={tpot_avg*1000:.1f}ms, "
+        f"total={total:.2f}s"
+    )
+    return text_accum, metrics
 
 async def fetch_benchmark(client, url, prompt, model_name, n_runs=1, max_tokens=32, temperature=0.0):
     endpoint = f"{url}/v1/completions"
