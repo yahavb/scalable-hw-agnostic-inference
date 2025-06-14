@@ -30,7 +30,7 @@ for model in models:
     port = os.environ[model['port_env']]
     model['url'] = f"http://{host}:{port}"
 
-async def fetch_text(client,url,prompt,max_new_tokens=32):
+async def fetch_text(client, url, prompt, model_name, max_tokens, temperature):
     endpoint = f"{url}/v1/completions"
     payload = {
       "model": model_name,
@@ -52,7 +52,7 @@ async def fetch_text(client,url,prompt,max_new_tokens=32):
         traceback.print_exc()
         return None, f"Error: {str(e)}"
 
-async def fetch_benchmark(client, url, prompt, n_runs=1, max_new_tokens=32):
+async def fetch_benchmark(client, url, prompt, model_name, n_runs=1, max_tokens=32, temperature=0.0):
     endpoint = f"{url}/v1/completions"
     payload = {
       "model": model_name,
@@ -65,7 +65,8 @@ async def fetch_benchmark(client, url, prompt, n_runs=1, max_new_tokens=32):
         response.raise_for_status()
         data = response.json()
 
-        response_text = base64.b64decode(data['report']).decode('utf-8')
+        #response_text = base64.b64decode(data['report']).decode('utf-8')
+        response_text = data['choices'][0]['text']
         execution_time = data.get('execution_time', 0)
 
         return response_text, f"{execution_time:.2f} seconds"
@@ -76,7 +77,7 @@ async def fetch_benchmark(client, url, prompt, n_runs=1, max_new_tokens=32):
         traceback.print_exc()
         return None, f"Error: {str(e)}"
 
-async def call_model_api(prompt,task_type,n_runs,max_new_tokens):
+async def call_model_api(prompt, task_type, n_runs, max_new_tokens, temperature):
     async with httpx.AsyncClient() as client:
       if task_type == "fetch_text":
         tasks = [
@@ -85,7 +86,7 @@ async def call_model_api(prompt,task_type,n_runs,max_new_tokens):
         ]
       else: 
         tasks = [
-            fetch_benchmark(client,model['url'],prompt,n_runs,max_new_tokens,temperature,)
+            fetch_benchmark(client,model['url'],prompt,model['name'],n_runs,max_new_tokens,temperature,)
             for model in models
         ]
       results = await asyncio.gather(*tasks)
