@@ -26,7 +26,8 @@ app = FastAPI()
 models = load_models_config()
 
 for model in models:
-    model['url'] = f"http://{model['service']}.default.svc.cluster.local:8000"
+    svc = model['service']
+    model['url'] = f"http://{svc}.default.svc.cluster.local:8000"
 
 async def fetch_text(client, url, prompt, model_name, max_tokens, temperature):
     endpoint = f"{url}/v1/completions"
