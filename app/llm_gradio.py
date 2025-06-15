@@ -76,6 +76,66 @@ async def fetch_text(client, url, prompt, model_name, max_tokens, temperature):
     return text_accum, metrics
 
 async def fetch_benchmark(client, url, prompt, model_name, n_runs=1, max_tokens=32, temperature=0.0):
+    ttfts = []
+    tputs = []
+    output_text = ""
+    for i in range(n_runs):
+        start = time.time()
+        ttft = None
+        last = start
+        tpot = []
+        text_accum = ""
+        payload = {
+          "model": model_name,
+          "prompt": [prompt],
+          "max_tokens": max_tokens,
+          "temperature": temperature,
+          "stream": True,
+        }
+        try:
+            async with client.stream("POST", f"{url}/v1/completions", json=payload, timeout=300.0) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data_str = line[len("data:"):].strip()
+                    if not data_str or data_str == "[DONE]":
+                        continue
+                    obj = json.loads(data_str)
+                    chunk = obj["choices"][0]["text"]
+
+                    now = time.time()
+                    if ttft is None:
+                        ttft = now - start
+                    else:
+                        tpot.append(now - last)
+                    last = now
+                    text_accum += chunk
+        except Exception as e:
+            traceback.print_exc()
+            return None, f"Error in run {i+1}: {e}"
+
+        ttfts.append(ttft or 0.0)
+        tputs.append((sum(tpot)/len(tpot)) if tpot else 0.0)
+        if i == 0:
+            output_text = text_accum
+
+    # percentile helper
+    def pct(arr, p):
+        a = sorted(arr)
+        idx = min(int(len(a)*p/100), len(a)-1)
+        return a[idx]
+
+    percs = [0, 50, 90, 95, 99]
+    ttft_vals = [pct(ttfts, p)*1000 for p in percs]
+    tput_vals = [pct(tputs, p)*1000 for p in percs]
+
+    ttft_report = ", ".join(f"P{p}={v:.1f}ms" for p, v in zip(percs, ttft_vals))
+    tput_report = ", ".join(f"P{p}={v:.1f}ms" for p, v in zip(percs, tput_vals))
+    report = f"TTFT: {ttft_report}; TPUT: {tput_report}"
+
+    return output_text, report
+'''
     latencies = []
     first_text = None
     for i in range(n_runs):
@@ -124,7 +184,7 @@ async def fetch_benchmark(client, url, prompt, model_name, n_runs=1, max_tokens=
     )
 
     return first_text or "", report
-
+'''
 async def call_model_api(model_name,prompt, task_type, n_runs, max_new_tokens, temperature):
     async with httpx.AsyncClient() as client:
       if task_type == "fetch_text":
