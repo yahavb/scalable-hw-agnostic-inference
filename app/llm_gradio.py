@@ -50,7 +50,10 @@ async def fetch_text(client, url, prompt, model_name, max_tokens, temperature):
           async for line in resp.aiter_lines():
             if not line.startswith("data:"):
               continue
-            chunk_obj = json.loads(line[len("data:"):].strip())
+            data_str = line[len("data:"):].strip()
+            if not data_str or data_str == "[DONE]":
+              continue
+            chunk_obj = json.loads(data_str)
             chunk = chunk_obj["choices"][0]["text"]
 
             now = time.time()
