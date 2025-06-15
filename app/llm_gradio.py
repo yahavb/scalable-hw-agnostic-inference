@@ -76,29 +76,54 @@ async def fetch_text(client, url, prompt, model_name, max_tokens, temperature):
     return text_accum, metrics
 
 async def fetch_benchmark(client, url, prompt, model_name, n_runs=1, max_tokens=32, temperature=0.0):
-    endpoint = f"{url}/v1/completions"
-    payload = {
-      "model": model_name,
-      "prompt": [prompt],
-      "max_tokens": max_tokens,
-      "temperature": temperature,
-    }
-    try:
-        response = await client.post(endpoint, json=payload, timeout=300.0)
-        response.raise_for_status()
-        data = response.json()
+    latencies = []
+    first_text = None
+    for i in range(n_runs):
+        payload = {
+          "model": model_name,
+          "prompt": [prompt],
+          "max_tokens": max_tokens,
+          "temperature": temperature,
+        }
+        start = time.time()
+        try:
+            resp = await client.post(f"{url}/v1/completions", json=payload, timeout=300.0)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            traceback.print_exc()
+            return None, f"Error run {i+1}: {e}"
 
-        #response_text = base64.b64decode(data['report']).decode('utf-8')
-        response_text = data['choices'][0]['text']
-        execution_time = data.get('execution_time', 0)
+        elapsed = time.time() - start
+        latencies.append(elapsed)
 
-        return response_text, f"{execution_time:.2f} seconds"
-    except httpx.RequestError as e:
-        traceback.print_exc()
-        return None, f"Request Error: {str(e)}"
-    except Exception as e:
-        traceback.print_exc()
-        return None, f"Error: {str(e)}"
+        if i == 0:
+            first_text = data["choices"][0]["text"]
+
+    # compute percentiles
+    latencies.sort()
+    def pct(p):
+        idx = min(int(len(latencies)*p/100), len(latencies)-1)
+        return latencies[idx]
+
+    p0 = pct(0)
+    p50 = pct(50)
+    p90 = pct(90)
+    p95 = pct(95)
+    p99 = pct(99)
+    p100 = pct(100)
+
+    # format in milliseconds
+    report = (
+      f"P0={p0*1000:.1f}ms, "
+      f"P50={p50*1000:.1f}ms, "
+      f"P90={p90*1000:.1f}ms, "
+      f"P95={p95*1000:.1f}ms, "
+      f"P99={p99*1000:.1f}ms, "
+      f"P100={p100*1000:.1f}ms"
+    )
+
+    return first_text or "", report
 
 async def call_model_api(model_name,prompt, task_type, n_runs, max_new_tokens, temperature):
     async with httpx.AsyncClient() as client:
