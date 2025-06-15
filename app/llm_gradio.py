@@ -78,9 +78,11 @@ async def fetch_text(client, url, prompt, model_name, max_tokens, temperature):
 async def fetch_benchmark(client, url, prompt, model_name, n_runs=1, max_tokens=32, temperature=0.0):
     ttfts = []
     tputs = []
+    totals  = []
     output_text = ""
     for i in range(n_runs):
         start = time.time()
+        total = None
         ttft = None
         last = start
         tpot = []
@@ -114,7 +116,8 @@ async def fetch_benchmark(client, url, prompt, model_name, n_runs=1, max_tokens=
         except Exception as e:
             traceback.print_exc()
             return None, f"Error in run {i+1}: {e}"
-
+        run_total = last - start
+        totals.append(run_total)
         ttfts.append(ttft or 0.0)
         tputs.append((sum(tpot)/len(tpot)) if tpot else 0.0)
         if i == 0:
@@ -129,10 +132,15 @@ async def fetch_benchmark(client, url, prompt, model_name, n_runs=1, max_tokens=
     percs = [0, 50, 90, 95, 99]
     ttft_vals = [pct(ttfts, p)*1000 for p in percs]
     tput_vals = [pct(tputs, p)*1000 for p in percs]
+    avg_total_ms = sum(totals)/len(totals)*1000
 
     ttft_report = ", ".join(f"P{p}={v:.1f}ms" for p, v in zip(percs, ttft_vals))
     tput_report = ", ".join(f"P{p}={v:.1f}ms" for p, v in zip(percs, tput_vals))
-    report = f"TTFT: {ttft_report}; TPUT: {tput_report}"
+    report = (
+      f"TTFT: {ttft_report}; "
+      f"TPUT: {tput_report}; "
+      f"AvgTotal={avg_total_ms:.1f}ms"
+    )
 
     return output_text, report
 '''
